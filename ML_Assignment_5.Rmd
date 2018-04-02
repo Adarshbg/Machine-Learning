@@ -295,7 +295,16 @@ rf_model <- h2o.randomForest(
 ```
 #### GBM Model
 ```{r}
-
+gbm_model <- h2o.gbm(
+  X, y,
+  training_frame = data_train,
+  ntrees = 200, 
+  max_depth = 10, 
+  learn_rate = 0.1, 
+  seed = 123,
+  nfolds = 5, 
+  keep_cross_validation_predictions = TRUE
+)
 ```
 
 #### Deep Learning Model
@@ -310,4 +319,54 @@ dl_model <- h2o.deeplearning(
 )
 ```
 
+### b. Evaluate validation set performance of each model.
+```{r}
+print(h2o.auc(h2o.performance(glm_model, newdata = data_val)))
+print(h2o.auc(h2o.performance(rf_model, newdata = data_val)))
+print(h2o.auc(h2o.performance(gbm_model, newdata = data_val)))
+print(h2o.auc(h2o.performance(deeplearning_model, newdata = data_val)))
+```
+### c. How large are the correlations of predicted scores of the validation set produced by the base learners?
+```{r}
+predictions <- data.table(
+  "glm" = as.data.frame(h2o.predict(glm_model, newdata = data_val)$Y)$Y,
+  "rf" = as.data.frame(h2o.predict(rf_model, newdata = data_val)$Y)$Y,
+  "gbm" = as.data.frame(h2o.predict(gbm_model, newdata = data_val)$Y)$Y,
+  "dl" = as.data.frame(h2o.predict(dl_model, newdata = data_val)$Y)$Y
+)
+```
+### d. Create a stacked ensemble model from the base learners. Experiment with at least two different ensembling meta learners.
+#### Default GLM meta learner.
+```{r}
+ensemble_model <- h2o.stackedEnsemble(
+  X, y,
+  training_frame = data_train,
+  base_models = list(glm_model,
+                     rf_model,
+                     gbm_model,
+                     dl_model))
+```
+
+#### GBM Meta learner.
+```{r}
+ensemble_model_gbm <- h2o.stackedEnsemble(
+  X, y,
+  training_frame = data_train,
+  metalearner_algorithm = "gbm",
+  base_models = list(glm_model, 
+                     rf_model,
+                     gbm_model,
+                     dl_model))
+```
+
+### e. Evaluate ensembles on validation set. Did it improve prediction?
+```{r}
+print(h2o.auc(h2o.performance(ensemble_model, newdata = data_val)))
+print(h2o.auc(h2o.performance(ensemble_model_gbm, newdata = data_val)))
+```
+
+### f. Evaluate the best performing model on the test set. How does performance compare to that of the validation set?
+```{r}
+print(h2o.auc(h2o.performance(ensemble_model_gbm, newdata = data_test)))
+```
 
